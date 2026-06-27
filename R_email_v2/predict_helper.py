@@ -9,8 +9,8 @@ import re
 import syllables
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
-# Load the trained model once at startup
-model = joblib.load("enron_model.pkl")
+# Load the trained model from the shared data folder
+model = joblib.load("../data/enron_model.pkl")
 
 ALL_FEATURE_COLS = ['EmailSend', 'has_question', 'char_count', 'exclamation_count',
                     'token_count', 'avg_word_length', 'stop_word_count', 'syllable_count']
