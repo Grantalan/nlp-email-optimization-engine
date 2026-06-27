@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ML model artifacts — too large for git (enron_data.pkl is 293MB)
+*.pkl
+
+# Sensitive keys
+keys.json
