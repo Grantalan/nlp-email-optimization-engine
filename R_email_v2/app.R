@@ -6,7 +6,7 @@ library(plotly)
 library(reticulate)
 library(DT)
 
-use_python("/opt/anaconda3/bin/python3", required = TRUE)
+use_virtualenv("email-optimizer-env", required = TRUE)
 source_python("predict_helper.py")
 source_python("rag_helper.py")
 
