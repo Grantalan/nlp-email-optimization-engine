@@ -1,32 +1,29 @@
 # RAG helper — loaded by the R Shiny app via reticulate.
 #
 # Flow:
-#   1. On startup, embed a knowledge base of Mailchimp best practices
-#   2. When called, embed the user's email and retrieve the most relevant tips
+#   1. On startup, fit a TF-IDF index over the Mailchimp knowledge base
+#   2. When called, retrieve the most relevant tips via cosine similarity
 #   3. Send retrieved tips + email + prediction score to OpenRouter
 #   4. Return a suggested revision and a list of key changes
+#
+# Note: uses sklearn TF-IDF instead of sentence_transformers so the app
+# can deploy to shinyapps.io without pulling in PyTorch (~1GB).
 
-import json
+import os
+import re
 import numpy as np
 from openai import OpenAI
-from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-# ── Load API key (same keys.json used in your rag.ipynb) ──────────────────────
-with open("keys.json", "r") as f:
-    api_key = json.load(f)["api_key"]
+api_key = os.environ.get("OPENROUTER_API_KEY")
 
 client = OpenAI(
     api_key = api_key,
     base_url = "https://openrouter.ai/api/v1"
 )
 
-# ── Embedding model (same as rag.ipynb) ───────────────────────────────────────
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
-
 # ── Mailchimp best-practice knowledge base ────────────────────────────────────
-# Each entry is a chunk of actionable email guidance drawn from Mailchimp's
-# published resources and email marketing research.
-
 BEST_PRACTICES = [
     # Subject lines
     "Keep subject lines under 50 characters so they display fully on mobile. Mailchimp data shows shorter subject lines consistently achieve higher open rates.",
@@ -66,20 +63,16 @@ BEST_PRACTICES = [
     "Avoid sending on Monday mornings (inbox is full) and Friday afternoons (people are checking out for the weekend).",
 ]
 
-# Pre-compute embeddings for the entire knowledge base at startup
-_kb_embeddings = embedder.encode(BEST_PRACTICES, convert_to_numpy=True)
+# Fit TF-IDF index over knowledge base at startup (no model download needed)
+_tfidf = TfidfVectorizer(stop_words="english")
+_kb_matrix = _tfidf.fit_transform(BEST_PRACTICES)
 
 
 def _retrieve(email_text, top_k=5):
     """Return the top_k most relevant best-practice chunks for this email."""
-    query_emb = embedder.encode([email_text], convert_to_numpy=True)
-
-    # Cosine similarity
-    norm_query = query_emb / (np.linalg.norm(query_emb, axis=1, keepdims=True) + 1e-9)
-    norm_kb    = _kb_embeddings / (np.linalg.norm(_kb_embeddings, axis=1, keepdims=True) + 1e-9)
-    scores     = (norm_kb @ norm_query.T).flatten()
-
-    top_idx = np.argsort(scores)[::-1][:top_k]
+    query_vec = _tfidf.transform([email_text])
+    scores    = cosine_similarity(query_vec, _kb_matrix).flatten()
+    top_idx   = np.argsort(scores)[::-1][:top_k]
     return [BEST_PRACTICES[i] for i in top_idx]
 
 
@@ -119,30 +112,22 @@ KEY CHANGES:
 """
 
     response = client.chat.completions.create(
-        model    = "openrouter/owl-alpha",
-        messages = [{"role": "user", "content": prompt}],
+        model       = "openrouter/owl-alpha",
+        messages    = [{"role": "user", "content": prompt}],
         temperature = 0.7,
         max_tokens  = 1200
     )
 
     raw = response.choices[0].message.content.strip()
 
-    # Flexible parser — handles model variations in section headers
-    import re
-
-    # Find "KEY CHANGES" section (case-insensitive, tolerates colons/spacing)
     split_match = re.search(r'KEY CHANGES[:\s]*\n', raw, re.IGNORECASE)
 
     if split_match:
         revised_block = raw[:split_match.start()].strip()
         changes_block = raw[split_match.end():].strip()
-
-        # Strip any "REVISED EMAIL:" or similar header from the top of the revised block
         revised_email = re.sub(r'^.*?EMAIL[:\s]*\n', '', revised_block, flags=re.IGNORECASE).strip()
         if not revised_email:
             revised_email = revised_block
-
-        # Extract bullet lines
         changes = [
             line.lstrip("-•* ").strip()
             for line in changes_block.splitlines()
@@ -151,7 +136,6 @@ KEY CHANGES:
         if not changes:
             changes = [l.strip() for l in changes_block.splitlines() if l.strip()]
     else:
-        # Fallback: return the whole response as the revised email
         revised_email = re.sub(r'^.*?EMAIL[:\s]*\n', '', raw, flags=re.IGNORECASE).strip() or raw
         changes = ["Review the revised email above for all improvements made."]
 
