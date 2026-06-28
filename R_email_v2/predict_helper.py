@@ -9,8 +9,16 @@ import re
 import syllables
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
-# Load the trained model from the shared data folder
-model = joblib.load("../data/enron_model.pkl")
+# Compatibility patch: pkl was saved with sklearn 1.6.1; newer versions
+# restructured _RemainderColsList — stub it back as a list subclass so
+# pickle can restore instances with __dict__.
+import sklearn.compose._column_transformer as _ct
+if not hasattr(_ct, '_RemainderColsList'):
+    class _RemainderColsList(list):
+        pass
+    _ct._RemainderColsList = _RemainderColsList
+
+model = joblib.load("enron_model.pkl")
 
 ALL_FEATURE_COLS = ['EmailSend', 'has_question', 'char_count', 'exclamation_count',
                     'token_count', 'avg_word_length', 'stop_word_count', 'syllable_count']

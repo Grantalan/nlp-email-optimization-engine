@@ -6,7 +6,16 @@ library(plotly)
 library(reticulate)
 library(DT)
 
-use_virtualenv("email-optimizer-env", required = TRUE)
+tryCatch(
+  use_virtualenv("email-optimizer-v2", required = TRUE),
+  error = function(e) {
+    virtualenv_create("email-optimizer-v2")
+    pkgs <- readLines("requirements.txt")
+    pkgs <- pkgs[nzchar(trimws(pkgs))]
+    virtualenv_install("email-optimizer-v2", packages = pkgs, pip_options = "--quiet")
+    use_virtualenv("email-optimizer-v2", required = TRUE)
+  }
+)
 source_python("predict_helper.py")
 source_python("rag_helper.py")
 

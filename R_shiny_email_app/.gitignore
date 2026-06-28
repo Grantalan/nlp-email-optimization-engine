@@ -1,5 +1,4 @@
 keys.json
-.Renviron
 *.pkl
 __pycache__/
 .Rhistory
