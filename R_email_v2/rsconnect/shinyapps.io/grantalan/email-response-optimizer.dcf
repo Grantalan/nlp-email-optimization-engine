@@ -1,0 +1,10 @@
+name: email-response-optimizer
+title:
+username: grantalan
+account: grantalan
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17558900
+bundleId: 12192410
+url: https://grantalan.shinyapps.io/email-response-optimizer/
+version: 1

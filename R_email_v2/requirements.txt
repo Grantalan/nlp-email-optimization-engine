@@ -1,6 +1,7 @@
-scikit-learn
+scikit-learn==1.7.2
 joblib
 numpy
 pandas
 openai
 syllables
+fastembed

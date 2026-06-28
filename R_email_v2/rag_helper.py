@@ -1,22 +1,26 @@
 # RAG helper — loaded by the R Shiny app via reticulate.
 #
 # Flow:
-#   1. On startup, fit a TF-IDF index over the Mailchimp knowledge base
-#   2. When called, retrieve the most relevant tips via cosine similarity
+#   1. On startup, embed the Mailchimp knowledge base using fastembed
+#      (same all-MiniLM-L6-v2 model, runs via ONNX — no PyTorch needed)
+#   2. When called, embed the user's email and retrieve top chunks
 #   3. Send retrieved tips + email + prediction score to OpenRouter
 #   4. Return a suggested revision and a list of key changes
-#
-# Note: uses sklearn TF-IDF instead of sentence_transformers so the app
-# can deploy to shinyapps.io without pulling in PyTorch (~1GB).
 
 import os
 import re
 import numpy as np
 from openai import OpenAI
-from sklearn.feature_extraction.text import TfidfVectorizer
+from fastembed import TextEmbedding
 from sklearn.metrics.pairwise import cosine_similarity
 
 api_key = os.environ.get("OPENROUTER_API_KEY")
+if not api_key:
+    import json
+    keys_path = "keys.json"
+    if os.path.exists(keys_path):
+        with open(keys_path, "r") as f:
+            api_key = json.load(f)["api_key"]
 
 client = OpenAI(
     api_key = api_key,
@@ -63,15 +67,15 @@ BEST_PRACTICES = [
     "Avoid sending on Monday mornings (inbox is full) and Friday afternoons (people are checking out for the weekend).",
 ]
 
-# Fit TF-IDF index over knowledge base at startup (no model download needed)
-_tfidf = TfidfVectorizer(stop_words="english")
-_kb_matrix = _tfidf.fit_transform(BEST_PRACTICES)
+# Load embedding model and pre-compute KB embeddings at startup
+_embedder  = TextEmbedding("sentence-transformers/all-MiniLM-L6-v2")
+_kb_matrix = np.array(list(_embedder.embed(BEST_PRACTICES)))
 
 
 def _retrieve(email_text, top_k=5):
     """Return the top_k most relevant best-practice chunks for this email."""
-    query_vec = _tfidf.transform([email_text])
-    scores    = cosine_similarity(query_vec, _kb_matrix).flatten()
+    query_emb = np.array(list(_embedder.embed([email_text])))
+    scores    = cosine_similarity(query_emb, _kb_matrix).flatten()
     top_idx   = np.argsort(scores)[::-1][:top_k]
     return [BEST_PRACTICES[i] for i in top_idx]
 
@@ -90,7 +94,7 @@ def suggest_revision(email_text, response_prob):
 The user wrote the email below. A machine learning model predicts it has a {response_prob:.0f}% chance of getting a reply within 3 hours.
 
 Your job:
-1. Rewrite the email so it is more likely to get a fast reply.
+1. Rewrite the email so it is more likely to get a fast reply. Use the actual words and content from the original email — do NOT use placeholder variables like {{{{name}}}}, {{{{company}}}}, or any template syntax. Write a complete, ready-to-send email using the real content provided.
 2. List the 3–5 most impactful changes you made, each as a short bullet point.
 
 Use the following Mailchimp best practices as guidance:
@@ -125,7 +129,7 @@ KEY CHANGES:
     if split_match:
         revised_block = raw[:split_match.start()].strip()
         changes_block = raw[split_match.end():].strip()
-        revised_email = re.sub(r'^.*?EMAIL[:\s]*\n', '', revised_block, flags=re.IGNORECASE).strip()
+        revised_email = re.sub(r'^[A-Z][A-Z\s]+:\s*\n', '', revised_block).strip()
         if not revised_email:
             revised_email = revised_block
         changes = [
@@ -136,7 +140,7 @@ KEY CHANGES:
         if not changes:
             changes = [l.strip() for l in changes_block.splitlines() if l.strip()]
     else:
-        revised_email = re.sub(r'^.*?EMAIL[:\s]*\n', '', raw, flags=re.IGNORECASE).strip() or raw
+        revised_email = re.sub(r'^[A-Z][A-Z\s]+:\s*\n', '', raw).strip() or raw
         changes = ["Review the revised email above for all improvements made."]
 
     return {"revised_email": revised_email, "changes": changes}
