@@ -116,7 +116,7 @@ KEY CHANGES:
 """
 
     response = client.chat.completions.create(
-        model       = "openrouter/owl-alpha",
+        model       = "openai/gpt-oss-20b:free",
         messages    = [{"role": "user", "content": prompt}],
         temperature = 0.7,
         max_tokens  = 1200

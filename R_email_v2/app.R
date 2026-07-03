@@ -68,7 +68,7 @@ ui <- page_fillable(
   # Always-visible header
   div(style = "padding: 1.2rem 1.5rem 0.8rem; border-bottom: 1px solid #2d3148; margin-bottom: 1rem;",
     div(class = "app-title", "[ EMAIL RESPONSE OPTIMIZER ]"),
-    div(class = "app-sub", "logistic regression · bag-of-words · RAG + OpenRouter · Enron corpus")
+    div(class = "app-sub", "logistic regression · bag-of-words · RAG + OpenAI · Enron corpus")
   ),
 
   # Main content — swaps between prediction view and revision view
@@ -97,7 +97,7 @@ server <- function(input, output, session) {
 
       div(class = "full-page",
         div(class = "full-page-header", "[ AI-SUGGESTED REVISION ]"),
-        div(class = "full-page-sub", "RAG · all-MiniLM-L6-v2 · openrouter/owl-alpha"),
+        div(class = "full-page-sub", "RAG · all-MiniLM-L6-v2 · openai/gpt-oss-20b"),
 
         layout_columns(
           col_widths = c(7, 5),
@@ -119,7 +119,7 @@ server <- function(input, output, session) {
             card_body(
               style = "display: flex; flex-direction: column; justify-content: space-between; height: calc(100% - 48px);",
               div(div(change_items),
-                  div(class = "rag-note", "↳ RAG · all-MiniLM-L6-v2 embeddings · openrouter/owl-alpha")),
+                  div(class = "rag-note", "↳ RAG · all-MiniLM-L6-v2 embeddings · openai/gpt-oss-20b")),
               div(
                 tags$hr(style = "border-color: #2d3148;"),
                 actionButton("reset_btn", "↺  CLEAR & START OVER",
