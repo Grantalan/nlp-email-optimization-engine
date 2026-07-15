@@ -220,5 +220,8 @@ __marimo__/
 # ML model artifacts — too large for git (enron_data.pkl is 293MB)
 *.pkl
 
+# Raw/processed Enron data — large corpus files, not tracked in git
+data/
+
 # Sensitive keys
 keys.json
